@@ -7,11 +7,11 @@ Code repository for the paper:
 [![arXiv](https://img.shields.io/badge/arXiv-XXXX.XXXXX-00ff00.svg)](https://janehwu.github.io/mcc-ho/)  [![Website shields.io](https://img.shields.io/website-up-down-green-red/http/shields.io.svg)](https://janehwu.github.io/mcc-ho/)
 
 <p align="center">
-<img width="720" alt="teaser" src="https://github.com/janehwu/mcc-ho/assets/9442165/b8e61d2a-90cf-4b2c-a722-6555b83661a8">
+<img width="1280" alt="teaser" src="https://janehwu.github.io/mcc-ho/mccho_results.png">
 </p>
 
 ## Installation
-Installation and preparation follow [the MAE repo](https://github.com/facebookresearch/mae), following [MCC](https://github.com/facebookresearch/MCC).
+Installation and preparation follow [the MAE repo](https://github.com/facebookresearch/mae), just like [MCC](https://github.com/facebookresearch/MCC).
 Please also install [PyTorch3D](https://pytorch3d.org/) for 3D related funcionality and the following libraries:
 
 ```
@@ -19,7 +19,7 @@ pip install omegaconf trimesh
 ```
 
 ## Data
-[TBD] Please see [DATASET.md](DATASET.md) for information on data preparation.
+Please see [DATASET.md](DATASET.md) for information on data preparation.
 
 ## Demo
 To run MCC-HO inference on any input image and estimated 3D hand, please use, e.g., 
