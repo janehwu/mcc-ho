@@ -4,7 +4,7 @@ Code repository for the paper:
 
 [Jane Wu](https://janehwu.github.io/), [Georgios Pavlakos](https://geopavlakos.github.io/), [Georgia Gkioxari](https://gkioxari.github.io/), [Jitendra Malik](http://people.eecs.berkeley.edu/~malik/)
 
-[![arXiv](https://img.shields.io/badge/arXiv-2404.06507-00ff00.svg)](https://arxiv.org/pdf/2404.06507.pdf)  [![Website shields.io](https://img.shields.io/website-up-down-green-red/http/shields.io.svg)](https://arxiv.org/pdf/2404.06507.pdf)
+[![arXiv](https://img.shields.io/badge/arXiv-2404.06507-00ff00.svg)](https://arxiv.org/pdf/2404.06507.pdf)  [![Website shields.io](https://img.shields.io/website-up-down-green-red/http/shields.io.svg)](https://janehwu.github.io/mcc-ho)
 
 <p align="center">
 <img width="1280" alt="teaser" src="https://janehwu.github.io/mcc-ho/mccho_results.png">
