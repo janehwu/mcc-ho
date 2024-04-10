@@ -4,7 +4,7 @@ Code repository for the paper:
 
 [Jane Wu](https://janehwu.github.io/), [Georgios Pavlakos](https://geopavlakos.github.io/), [Georgia Gkioxari](https://gkioxari.github.io/), [Jitendra Malik](http://people.eecs.berkeley.edu/~malik/)
 
-[![arXiv](https://img.shields.io/badge/arXiv-2404.03566-00ff00.svg)](https://arxiv.org/pdf/2404.03566.pdf)  [![Website shields.io](https://img.shields.io/website-up-down-green-red/http/shields.io.svg)](https://arxiv.org/pdf/2404.03566.pdf)
+[![arXiv](https://img.shields.io/badge/arXiv-2404.06507-00ff00.svg)](https://arxiv.org/pdf/2404.06507.pdf)  [![Website shields.io](https://img.shields.io/website-up-down-green-red/http/shields.io.svg)](https://arxiv.org/pdf/2404.06507.pdf)
 
 <p align="center">
 <img width="1280" alt="teaser" src="https://janehwu.github.io/mcc-ho/mccho_results.png">
@@ -58,7 +58,7 @@ If you find this code useful for your research, please consider citing the follo
 @article{wu2024reconstructing,
   title={Reconstructing Hand-Held Objects in 3D},
   author={Wu, Jane and Pavlakos, Georgios and Gkioxari, Georgia and Malik, Jitendra},
-  journal={arXiv preprint arXiv:2404.03566,
+  journal={arXiv preprint arXiv:2404.06507,
   year={2024},
 }
 ```
