@@ -1,15 +1,18 @@
 # This source code is adapted from:
 # MCC: https://github.com/facebookresearch/MCC
+import os
 import numpy as np
 import cv2
 import json
 from tqdm import tqdm
 
 import torch
+import trimesh
 from pytorch3d.io.obj_io import load_obj
 
 import main_mccho
 import mccho_model
+import util.hamer_utils as hamer
 import util.misc as misc
 from engine_mccho import prepare_data, generate_html, generate_objs
 
@@ -19,8 +22,44 @@ from pytorch3d.structures import Meshes
 
 # rendering components
 from pytorch3d.renderer import (
-    PerspectiveCameras, RasterizationSettings, MeshRasterizer, TexturesVertex
+    BlendParams, PerspectiveCameras, RasterizationSettings, MeshRasterizer,
+    MeshRenderer, SoftSilhouetteShader, TexturesVertex
 )
+
+
+def get_silhouette_renderer(cameras, imh, imw):
+    blend_params = BlendParams(sigma=1e-4, gamma=1e-4)
+
+    raster_settings = RasterizationSettings(
+        image_size=(imh, imw), 
+        blur_radius=np.log(1. / 1e-4 - 1.) * blend_params.sigma, 
+        faces_per_pixel=150,
+        bin_size=0,
+    )
+    
+    # Create a silhouette mesh renderer by composing a rasterizer and a shader. 
+    silhouette_renderer = MeshRenderer(
+        rasterizer=MeshRasterizer(
+            cameras=cameras, 
+            raster_settings=raster_settings
+        ),
+        shader=SoftSilhouetteShader(blend_params=blend_params)
+    )
+    return silhouette_renderer
+
+
+def get_rasterizer(cameras, imh, imw):
+    raster_settings = RasterizationSettings(
+        image_size=(imh, imw),
+        blur_radius=0.0,
+        faces_per_pixel=1,
+        bin_size=0,
+    )
+    rasterizer = MeshRasterizer(
+        cameras=cameras,
+        raster_settings=raster_settings
+    )
+    return rasterizer
 
 
 def run_viz(model, samples, device, args, seen_mean, seen_sd, prefix):
@@ -85,7 +124,7 @@ def run_viz(model, samples, device, args, seen_mean, seen_sd, prefix):
             gt_rgb=None,
             mesh_xyz=None,
             pred_seg=torch.cat(pred_segs, dim=0),
-            score_thresholds=args.score_thresholds
+            score_thresholds=args.score_thresholds,
         )
         generate_objs(
             torch.cat(pred_occupy, dim=1),
@@ -115,8 +154,34 @@ def normalize(seen_xyz, sd_scale=3):
     return seen_xyz, mean, sd
 
 
-def main(args):
+def main(args, device='cuda'):
+    # Read image
+    rgb = cv2.imread(args.image)
 
+    # Run HaMeR to obtain 3D hands
+    hamer_out = hamer.run_demo(args.image, os.path.join(args.out_folder, 'hamer'))
+    # Select the hand
+    batch_size = hamer_out['batch']['img'].shape[0]
+    hand_idx = 0
+    for n in range(batch_size):
+        # Hands are ranked by confidence, so we take the first match.
+        if args.is_right_hand == hamer_out['batch']['right'][n]:
+            hand_idx = n
+            break
+    hand_path = os.path.join(args.out_folder, 'hamer', args.image.split('.')[0].split('/')[-1] + '_%d.obj' % n)
+    print('Selected hand:', hand_path)
+    assert os.path.exists(hand_path)
+    hand_obj = load_obj(hand_path)
+    hand_verts = hand_obj[0]
+    # pyrender to pytorch3d conversion
+    hand_verts[:, 0] *= -1
+    hand_verts[:, 2] *= -1
+    hand_faces = hand_obj[1].verts_idx
+    # Save out for debugging.
+    mesh = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), hand_faces.detach().cpu().numpy())
+    mesh.export(os.path.join(args.out_folder, 'input_hand.obj'))
+
+    # Load MCC-HO model.
     model = mccho_model.get_mccho_model(
         occupancy_weight=1.0,
         rgb_weight=0.01,
@@ -124,11 +189,6 @@ def main(args):
     ).cuda()
 
     misc.load_model(args=args, model_without_ddp=model, optimizer=None, loss_scaler=None)
-
-    rgb = cv2.imread(args.image)
-    hand_obj = load_obj(args.hand)
-    hand_verts = hand_obj[0]
-    hand_faces = hand_obj[1].verts_idx
 
     # Initialize camera
     H, W = rgb.shape[:2]
@@ -146,18 +206,7 @@ def main(args):
         device='cpu'
     )
 
-    # Rasterize hand to get visible points
-    raster_settings = RasterizationSettings(
-        image_size=(H, W),
-        blur_radius=0.0,
-        faces_per_pixel=1,
-        bin_size=0,
-    )
-    rasterizer = MeshRasterizer(
-        cameras=cameras,
-        raster_settings=raster_settings
-    )
-
+    # Initialize hand mesh as Pytorch3D object
     verts_rgb = torch.ones(hand_verts.shape, dtype=torch.float32)
     textures = TexturesVertex(verts_features=[verts_rgb])
     hand_mesh = Meshes(
@@ -165,6 +214,15 @@ def main(args):
         faces=[hand_faces],
         textures=textures
     )
+
+    # Render hand mask to be combined with obj mask later
+    silhouette_renderer = get_silhouette_renderer(cameras, H, W)
+    hand_mask = silhouette_renderer(hand_mesh)[0].detach().cpu().numpy()
+    hand_mask = (hand_mask[..., 3] > 0).astype(np.uint8)
+    cv2.imwrite(os.path.join(args.out_folder, 'hand_mask.png'), hand_mask*255)
+
+    # Rasterize hand to get visible points
+    rasterizer = get_rasterizer(cameras, H, W)
     fragments = rasterizer(hand_mesh)
     pix_to_face = fragments.pix_to_face
     raster_vert_weights = fragments.bary_coords
@@ -173,7 +231,6 @@ def main(args):
     pixel_points = torch.matmul(raster_vert_weights[0], pixel_tris)[..., 0, :]
     depth = pixel_points[..., 2]
     depth[depth < 0] = float('inf')
-    print('Depth:', depth.shape)
 
     seen_xyz = pixel_points
     seen_xyz[..., 2] = depth
@@ -189,8 +246,10 @@ def main(args):
     )[0].permute(1, 2, 0)
 
     # Load hand-object mask to determine bbox only
-    seg = cv2.imread(args.seg, cv2.IMREAD_UNCHANGED)
-    mask = torch.tensor(cv2.resize(seg, (W, H))).bool()
+    obj_mask = (cv2.imread(args.obj_seg, cv2.IMREAD_UNCHANGED) > 0).astype(np.uint8)
+    mask = ((obj_mask + hand_mask) > 0).astype(np.uint8)
+    cv2.imwrite(os.path.join(args.out_folder, 'combined_mask.png'), mask*255)
+    mask = torch.tensor(cv2.resize(mask, (W, H))).bool()
 
     bottom, right = mask.nonzero().max(dim=0)[0]
     top, left = mask.nonzero().min(dim=0)[0]
@@ -228,16 +287,17 @@ def main(args):
         [torch.zeros((20000, 3)), torch.zeros((20000, 3))],
 
     ]
-    run_viz(model, samples, "cuda", args, seen_mean, seen_sd, prefix=args.output)
+    prefix = os.path.join(args.out_folder, 'output')
+    run_viz(model, samples, device, args, seen_mean, seen_sd, prefix)
 
 
 if __name__ == '__main__':
     parser = main_mccho.get_args_parser()
-    parser.add_argument('--image', default='demo/boardgame_v_W_qdSiPKSdQ_frame000019.jpg', type=str, help='input image file')
-    parser.add_argument('--hand', default='demo/boardgame_v_W_qdSiPKSdQ_frame000019_hand.obj', type=str, help='input hand obj file')
-    parser.add_argument('--seg', default='demo/boardgame_v_W_qdSiPKSdQ_frame000019_mask.png', type=str, help='input hand-object bbox')
-    parser.add_argument('--cam', default='demo/camera_intrinsics_mow.json', type=str, help='input Pytorch3D PerspectiveCamera intrinsics')
-    parser.add_argument('--output', default='demo/output', type=str, help='output path')
+    parser.add_argument('--image', default='demo/drink_v_1F96GArORtg_frame000084.jpg', type=str, help='input image file')
+    parser.add_argument('--obj_seg', default='demo/drink_v_1F96GArORtg_frame000084_mask.png', type=str, help='input object segmentation mask')
+    parser.add_argument('--cam', default='demo/camera_intrinsics_hamer.json', type=str, help='input Pytorch3D PerspectiveCamera intrinsics corresponding to scaled_focal_length=1000')
+    parser.add_argument('--is_right_hand', default=True, type=bool, help='whether the right hand is manipulating the object')
+    parser.add_argument('--out_folder', default='out_demo', type=str, help='output folder')
     parser.add_argument('--granularity', default=0.1, type=float, help='output granularity')
     parser.add_argument('--score_thresholds', default=[0.1, 0.2, 0.3, 0.4, 0.5], type=float, nargs='+', help='score thresholds')
     parser.add_argument('--temperature', default=0.1, type=float, help='temperature for color prediction.')

@@ -241,6 +241,7 @@ def get_f1(precision, recall):
 
 
 def generate_objs(pred_occ, pred_rgb, unseen_xyz, prefix, pred_seg=None,
+        seen_mean=None, seen_sd=None,
         score_thresholds=[0.1, 0.3, 0.5, 0.7, 0.9]):
     clouds = {"MCC Output": {}}
     pred_occ = torch.nn.Sigmoid()(pred_occ).cpu()
@@ -256,6 +257,10 @@ def generate_objs(pred_occ, pred_rgb, unseen_xyz, prefix, pred_seg=None,
             return
         points = points[good_points].cpu()
         features = features[good_points].cpu()
+
+        if seen_mean is not None and seen_sd is not None:
+            print('Unnormalizing predicted points')
+            points = points * seen_sd + seen_mean
 
         # Write obj (just pts)
         out_f = prefix + ('_%.1f.obj' % t)
@@ -277,6 +282,9 @@ def generate_objs(pred_occ, pred_rgb, unseen_xyz, prefix, pred_seg=None,
             hand_points = hand_points[good_points].cpu()
             hand_features = hand_features[good_points].cpu()
             if len(hand_points) > 0:
+                if seen_mean is not None and seen_sd is not None:
+                    print('Unnormalizing predicted hand points')
+                    hand_points = hand_points * seen_sd + seen_mean
                 out_f = prefix + ('_%.1f_hand.obj' % t)
                 write_pred_obj(out_f, hand_points, hand_features)
 
@@ -287,6 +295,9 @@ def generate_objs(pred_occ, pred_rgb, unseen_xyz, prefix, pred_seg=None,
             obj_points = obj_points[good_points].cpu()
             obj_features = obj_features[good_points].cpu()
             if len(obj_points) > 0:
+                if seen_mean is not None and seen_sd is not None:
+                    print('Unnormalizing predicted obj points')
+                    obj_points = obj_points * seen_sd + seen_mean
                 out_f = prefix + ('_%.1f_obj.obj' % t)
                 write_pred_obj(out_f, obj_points, obj_features)
     return
