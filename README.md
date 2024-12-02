@@ -28,7 +28,11 @@ git submodule update --init --recursive
 Please follow [the HaMeR repo](https://github.com/geopavlakos/hamer) for installation instructions. Afer installing HaMeR, you will need to create a symlink to the HaMeR data/checkpoints to be used for our demo:
 
 ```
-ln -s [path to HaMeR _DATA folder] .
+ln -s [path to HaMeR root]/_DATA .
+```
+HaMeR requires ViTPose. You can either install ViTPose in the `third-party` folder of this repository, or symlink the installation from HaMeR (recommended):
+```
+ln -s [path to HaMeR root]/third-party/ViTPose third-party/ViTPose
 ```
 
 ## Data
